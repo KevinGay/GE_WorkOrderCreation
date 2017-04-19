@@ -40,6 +40,13 @@
 function parseJson (inJson) {
     /*
      Take a json file and extract the alertId, alertType, assetId, siteId, comments, and statusType.
+     Then connect to a database and:
+        If the alertId does not exist in the database and the statusType is 'Initiate', insert it with the fields listed above.
+        If the alertId is already in the database and the statusType is not 'Initiate', update the current alertId
+            to show the new status followed by the new comments.
+
+     If any error occurs, show the log in the console and write it to the log file. Also log any JSON that comes through
+        into the log file.
 
      alertId : primary key in staging area. Uniquely identifies alerts.
      alertType : specifies what kind of alert is being created.
@@ -57,179 +64,148 @@ function parseJson (inJson) {
     var statusType = inJson['type'];
     var timeStamp = inJson['initiateTimestamp'];
 
-    return [alertId, alertType, assetId, siteId, comments, statusType];
+    /* Uncomment this on deployment
+     if (alertType != 'Maintenance') {
+     return;
+     }
+     */
+
+    //Database scripting starts here
+    var async = require('async');
+    var oracledb = require('oracledb');
+
+    //fs is required to create/write to the log file
+    var fs = require('fs');
+
+    //dbConfig contains the Oracle database connection information
+    var dbConfig = require('./dbconfig.js');
+
+    var doconnect = function(cb) {
+        /*
+         Connect to the Oracle database using the specified info in dbConfig
+         */
+        oracledb.getConnection(
+            {
+                user          : dbConfig.user,
+                password      : dbConfig.password,
+                connectString : dbConfig.connectString
+            },
+            cb);
+    };
+
+    var dorelease = function(conn) {
+        /*
+         Close the connection to the database when everything is finished.
+         This should always be done if nothing else is being processed!
+         If there is an error closing the connection, print and log the error.
+         */
+        conn.close(function (err) {
+            if (err)
+                //fs.appendFile("logfile.txt",err.message + "\n");
+                console.error(err.message);
+        });
+    };
+
+    var doinsert = function (conn, cb) {
+        /*
+         Insert the necessary information into the staging area.
+         If there is an error inserting the data, print and log the error message.
+         Else, display how many rows were inserted.
+         Also automatically commit the database upon successful insertion into the database.
+         */
+        conn.execute(
+            "INSERT INTO staging VALUES (:alert_id, :alert_type, :asset_id, :site_id, :comments)",
+            [alertId, alertType, assetId, siteId, comments],  // Bind values
+            { autoCommit: true},  // Override the default non-autocommit behavior
+            function(err, result)
+            {
+                if (err) {
+                    //return fs.appendFile("logfile.txt",cb(err,conn) + "\n");
+                    return cb(err, conn);
+                } else {
+                    //return fs.appendFile("logfile.txt", "INSERTED ALERT_ID:" + alertId + "\n" +inJson+"\n");
+                    console.log("Rows inserted: " + result.rowsAffected);  // 1
+                    return cb(null, conn);
+                }
+            });
+    };
+
+    var updateAlert = function (conn, cb) {
+        /*
+         Check to see if an alert id already exists.
+         check and see if the alertId already exists in the staging area.
+         If it does, update the comments to: currentStatus. newComments
+         */
+        var newComments = statusType + ". " + comments;
+        conn.execute(
+            "UPDATE staging SET comments=:newComments WHERE alert_id = :alertId",
+            [newComments, alertId],
+            { autoCommit: true},  // Override the default non-autocommit behavior
+            function(err, result)
+            {
+                if (err) {
+                    //return fs.appendFile("logfile.txt",cb(err, conn) + "\n");
+                    return cb(err, conn);
+                } else {
+                    if ( result.rowsAffected > 0) {
+                        //fs.appendFile("logfile.txt","UPDATED ALERT_ID:" + alertId +"\n" +inJson+"\n");
+                        console.log("Rows altered: " + result.rowsAffected);  // 1
+                    }
+                    else {
+                        //fs.appendFile("logfile.txt","An alert with id " + alertId + " does not currently exist in the staging table.\n");
+                        console.log("An alert with id " + alertId + " does not currently exist in the staging table.");
+                    }
+                    return cb(null, conn);
+                }
+            });
+
+
+    };
+
+    //If the statusType says to initiate an alert, parse and send the alert information to the staging area.
+    if (statusType == "Initiate") {
+        async.waterfall(
+            [
+                doconnect,
+                doinsert
+            ],
+            function (err, conn) {
+                if (err) {
+                    //fs.appendFile("logfile.txt","In insert error cb: ==>" + err + "<==");
+                    console.error("In insert error cb: ==>", err, "<==");
+                }
+                if (conn) {
+                    dorelease(conn);
+                }
+            });
+    }
+
+    //If the statusType is anything other than "initiate", check and see if the alertId already exists in the staging area.
+    //If it does, update the comments to: currentStatus. newComments
+    else{
+        async.waterfall(
+            [
+                doconnect,
+                updateAlert
+            ],
+            function (err, conn) {
+                if (err) {
+                    //fs.appendFile("logfile.txt","In update error cb: ==>" + err + "<==");
+                    console.error("In update error cb: ==>", err, "<==");
+                }
+                if (conn) {
+                    dorelease(conn);
+                }
+            });
+    }
 
 }
 
-var alert = {"type":"Initiate","timestamp":1492051668167,"alert":{"id":22424,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"test 7","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
+var alert = {"type":"Initiate","timestamp":1492051668167,"alert":{"id":22425,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"test 7","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
 
-var updatealert = {"type":"Resolved","timestamp":1492051668167,"alert":{"id":22424,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"test 7","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
+var updatealert = {"type":"Acknowledged","timestamp":1492051668167,"alert":{"id":22424,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"test 7","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
 
 
 //Call function with test Json above
-var statements = parseJson(updatealert)
+parseJson(updatealert)
 
-
-//Split up parsed variables for readability
-var alertId = statements[0];
-var alertType = statements[1];
-var assetId = statements[2];
-var siteId = statements[3];
-var comments = statements[4];
-var statusType = statements[5];
-
-/* Uncomment this on deployment
- if (alertType != 'Maintenance') {
- return;
- }
- */
-
-
-//Database scripting starts here
-var async = require('async');
-var oracledb = require('oracledb');
-
-//dbConfig contains the Oracle database connection information
-var dbConfig = require('./dbconfig.js');
-
-var doconnect = function(cb) {
-    /*
-    Connect to the Oracle database using the specified info in dbConfig
-     */
-    oracledb.getConnection(
-        {
-            user          : dbConfig.user,
-            password      : dbConfig.password,
-            connectString : dbConfig.connectString
-        },
-        cb);
-};
-
-var dorelease = function(conn) {
-    /*
-     Close the connection to the database when everything is finished.
-     This should always be done if nothing else is being processed!
-     If there is an error closing the connection, print and log the error.
-     */
-    conn.close(function (err) {
-        if (err)
-            console.error(err.message);
-    });
-};
-
-var doinsert = function (conn, cb) {
-    /*
-     Insert the necessary information into the staging area.
-     If there is an error inserting the data, print and log the error message.
-        Else, display how many rows were inserted.
-     Also automatically commit the database upon successful insertion into the database.
-     */
-    conn.execute(
-        "INSERT INTO staging VALUES (:alert_id, :alert_type, :asset_id, :site_id, :comments)",
-        [alertId, alertType, assetId, siteId, comments],  // Bind values
-        { autoCommit: true},  // Override the default non-autocommit behavior
-        function(err, result)
-        {
-            if (err) {
-                return cb(err, conn);
-            } else {
-                console.log("Rows inserted: " + result.rowsAffected);  // 1
-                return cb(null, conn);
-            }
-        });
-};
-
-/*
-var checkExists = function (conn, cb) {
-
-    Check to see if an alert id already exists.
-     check and see if the alertId already exists in the staging area.
-     If it does, update the comments to: currentStatus. newComments
-
-
-
-    conn.execute(
-        "SELECT alert_id FROM staging WHERE alert_id = :alertId",
-        [alertId],
-        function(err, result)
-        {
-            if (err) {
-                return cb(err, conn);
-            } else {
-                console.log(result.rows.length);
-                if (result.rows.length > 0 ){
-                    true;
-                }
-                else {
-                    console.log("An alert with id " + alertId + " does not currently exist in the staging table.");
-                    false;
-                }
-            }
-        });
-};
-
-*/
-
-var updateAlert = function (conn, cb) {
-    /*
-     Check to see if an alert id already exists.
-     check and see if the alertId already exists in the staging area.
-     If it does, update the comments to: currentStatus. newComments
-     */
-    var newComments = statusType + ". " + comments;
-    conn.execute(
-        "UPDATE staging SET comments=:newComments WHERE alert_id = :alertId",
-        [newComments, alertId],
-        { autoCommit: true},  // Override the default non-autocommit behavior
-        function(err, result)
-        {
-            if (err) {
-                return cb(err, conn);
-            } else {
-                if ( result.rowsAffected > 0) {
-                    console.log("Rows altered: " + result.rowsAffected);  // 1
-                }
-                else {
-                    console.log("An alert with id " + alertId + " does not currently exist in the staging table.");
-                }
-                return cb(null, conn);
-            }
-        });
-
-
-};
-
-//If the statusType says to initiate an alert, parse and send the alert information to the staging area.
-if (statusType == "Initiate") {
-    async.waterfall(
-        [
-            doconnect,
-            doinsert
-        ],
-        function (err, conn) {
-            if (err) {
-                console.error("In insert error cb: ==>", err, "<==");
-            }
-            if (conn) {
-                dorelease(conn);
-            }
-        });
-}
-
-//If the statusType is anything other than "initiate", check and see if the alertId already exists in the staging area.
-//If it does, update the comments to: currentStatus. newComments
-else{
-    async.waterfall(
-        [
-            doconnect,
-            updateAlert
-        ],
-        function (err, conn) {
-            if (err) {
-                console.error("In update error cb: ==>", err, "<==");
-            }
-            if (conn) {
-                dorelease(conn);
-            }
-        });
-}
