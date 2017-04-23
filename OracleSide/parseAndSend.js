@@ -29,6 +29,8 @@
  *		Otherwise, check and make sure the alert ID exists in the database and updateCommands
  *		the comments if it does.
  *
+ *   Also maintains a log of all errors and all successful actions.	
+ *
  * DEPENDENCIES (node_modules must be located in the same directory as this file)
  *	oracledb - node.js/Oracle interaction (needs Python 2.7, C++11 compiler,
  Oracle InstantClient 12)
