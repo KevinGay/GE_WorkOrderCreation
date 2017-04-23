@@ -37,6 +37,24 @@
  *
  *****************************************************************************/
 
+function writeToLog(errMessage) {
+    /*
+    Append a message to a log file, which will save the date and time at which the action occurred and
+        either: an error message that was returned by Oracle or the JSON file that was altered or inserted.
+     */
+
+    //fs is required to create/write to the log file
+    var fs = require('fs');
+
+    //Create new date object, which stores the current date & time by default
+    var dateTime = new Date();
+
+    fs.appendFile('logfile.txt', dateTime + ":\t" + errMessage + "\n", function (err) {
+        if (err) throw err;
+        console.log("Written to log: " + errMessage);
+    });
+}
+
 function parseJson (inJson) {
     /*
      Take a json file and extract the alertId, alertType, assetId, siteId, comments, and statusType.
@@ -50,7 +68,8 @@ function parseJson (inJson) {
 
      alertId : primary key in staging area. Uniquely identifies alerts.
      alertType : specifies what kind of alert is being created.
-     assetId : identifies machine that the alert is addressing.
+     assetId : identifies machine that the alert is addressing. This is found by calling the API to the asset model and passing
+        it the siteId.
      siteId : the location of the machine.
      comments: anything extra that the user wants to include about the alert.
      statusType: whether the alert is being initiated or updated.
@@ -73,9 +92,6 @@ function parseJson (inJson) {
     //Database scripting starts here
     var async = require('async');
     var oracledb = require('oracledb');
-
-    //fs is required to create/write to the log file
-    var fs = require('fs');
 
     //dbConfig contains the Oracle database connection information
     var dbConfig = require('./dbconfig.js');
@@ -101,8 +117,7 @@ function parseJson (inJson) {
          */
         conn.close(function (err) {
             if (err)
-                //fs.appendFile("logfile.txt",err.message + "\n");
-                console.error(err.message);
+                writeToLog(err.message);
         });
     };
 
@@ -120,11 +135,9 @@ function parseJson (inJson) {
             function(err, result)
             {
                 if (err) {
-                    //return fs.appendFile("logfile.txt",cb(err,conn) + "\n");
                     return cb(err, conn);
                 } else {
-                    //return fs.appendFile("logfile.txt", "INSERTED ALERT_ID:" + alertId + "\n" +inJson+"\n");
-                    console.log("Rows inserted: " + result.rowsAffected);  // 1
+                    writeToLog("INSERTED ALERT_ID:" + alertId);
                     return cb(null, conn);
                 }
             });
@@ -144,16 +157,13 @@ function parseJson (inJson) {
             function(err, result)
             {
                 if (err) {
-                    //return fs.appendFile("logfile.txt",cb(err, conn) + "\n");
                     return cb(err, conn);
                 } else {
                     if ( result.rowsAffected > 0) {
-                        //fs.appendFile("logfile.txt","UPDATED ALERT_ID:" + alertId +"\n" +inJson+"\n");
-                        console.log("Rows altered: " + result.rowsAffected);  // 1
+                        writeToLog("UPDATED ALERT_ID:" + alertId);
                     }
                     else {
-                        //fs.appendFile("logfile.txt","An alert with id " + alertId + " does not currently exist in the staging table.\n");
-                        console.log("An alert with id " + alertId + " does not currently exist in the staging table.");
+                        writeToLog("An alert with id " + alertId + " does not currently exist in the staging table.");
                     }
                     return cb(null, conn);
                 }
@@ -171,8 +181,7 @@ function parseJson (inJson) {
             ],
             function (err, conn) {
                 if (err) {
-                    //fs.appendFile("logfile.txt","In insert error cb: ==>" + err + "<==");
-                    console.error("In insert error cb: ==>", err, "<==");
+                    writeToLog(err.message);
                 }
                 if (conn) {
                     dorelease(conn);
@@ -190,22 +199,20 @@ function parseJson (inJson) {
             ],
             function (err, conn) {
                 if (err) {
-                    //fs.appendFile("logfile.txt","In update error cb: ==>" + err + "<==");
-                    console.error("In update error cb: ==>", err, "<==");
+                    writeToLog(err.message);
                 }
                 if (conn) {
                     dorelease(conn);
                 }
             });
     }
-
 }
 
-var alert = {"type":"Initiate","timestamp":1492051668167,"alert":{"id":22425,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"test 7","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
+var alert = {"type":"Initiate","timestamp":1492051668167,"alert":{"id":22426,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"test 7","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
 
 var updatealert = {"type":"Acknowledged","timestamp":1492051668167,"alert":{"id":22424,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"test 7","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
 
 
 //Call function with test Json above
-parseJson(updatealert)
+parseJson(alert)
 
