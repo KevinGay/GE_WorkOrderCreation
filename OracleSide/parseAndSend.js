@@ -20,20 +20,21 @@
  *
  * DESCRIPTION
  *   Takes a Json file and extracts the necessary information, then connects
- *		to an oracle database table (specified in dbconfig.js) and inserts (initiate)
+ *		to an oracle database table (specified in dbconfig.js) and inserts (if statusType == initiate)
  *		or updates(otherwise) the parsed information.
  *
  *	 Only parse and send data with the alert type of 'Maintenance'.
+ *	 If the assetId does not start with 'M00', call the API to send an error message back to eAndon.
  *
  *	 If statusType = 'Initiate', then create and insert the alert to the staging area.
- *		Otherwise, check and make sure the alert ID exists in the database and updateCommands
- *		the comments if it does.
+ *		Otherwise, check and make sure the alert ID exists in the database and update
+ *		the statusType if it does.
  *
- *   Also maintains a log of all errors and all successful actions.	
+ *   Also maintains a log of all errors and all successful actions.
  *
  * DEPENDENCIES (node_modules must be located in the same directory as this file)
  *	oracledb - node.js/Oracle interaction (needs Python 2.7, C++11 compiler,
- Oracle InstantClient 12)
+ *  Oracle InstantClient 12)
  *	async - Handles multiple processes running at once
  *
  *
@@ -59,7 +60,7 @@ function writeToLog(errMessage) {
 
 function parseJson (inJson) {
     /*
-     Take a json file and extract the alertId, alertType, assetId, siteId, comments, and statusType.
+     Take a json file and extract the alertId, assetId, siteId, alertType, statusType, timeStamp, and comments.
      Then connect to a database and:
         If the alertId does not exist in the database and the statusType is 'Initiate', insert it with the fields listed above.
         If the alertId is already in the database and the statusType is not 'Initiate', update the current alertId
@@ -69,27 +70,36 @@ function parseJson (inJson) {
         into the log file.
 
      alertId : primary key in staging area. Uniquely identifies alerts.
-     alertType : specifies what kind of alert is being created.
      assetId : identifies machine that the alert is addressing. This is found by calling the API to the asset model and passing
         it the siteId.
      siteId : the location of the machine.
-     comments: anything extra that the user wants to include about the alert.
+     alertType : specifies what kind of alert is being created.
      statusType: whether the alert is being initiated or updated.
+     comments: anything extra that the user wants to include about the alert.
      */
 
     var alertId = inJson['alert']['id'];
-    var alertType = inJson['alert']['alertDefinition']['alertType']['name'];
-    var assetId = 'TEST_ASSET_ID';
     var siteId = inJson['alert']['alertDefinition']['locationId'];
-    var comments = inJson['alert']['alertComments'][0]['alertComment'];
+    var alertType = inJson['alert']['alertDefinition']['alertType']['name'];
     var statusType = inJson['type'];
     var timeStamp = inJson['initiateTimestamp'];
+    var comments = inJson['alert']['alertComments'][0]['alertComment'];
+    var assetId = comments.substring(0,8);
 
     /* Uncomment this on deployment
      if (alertType != 'Maintenance') {
+        return;
+     }
+
+     // If the assetId does not start with 'M00' return an invalid assetId error back to eAndon and write it to logFile.
+     if (!assetId.startsWith('M00')) {
+     //Send error back to eAndon through API
+
+     writeToLog("Invalid asset ID given. Expected asset ID starting with M00, but given asset ID is " + assetId);
      return;
      }
      */
+
 
     //Database scripting starts here
     var async = require('async');
@@ -131,8 +141,8 @@ function parseJson (inJson) {
          Also automatically commit the database upon successful insertion into the database.
          */
         conn.execute(
-            "INSERT INTO staging VALUES (:alert_id, :alert_type, :asset_id, :site_id, :comments)",
-            [alertId, alertType, assetId, siteId, comments],  // Bind values
+            "INSERT INTO staging VALUES (:alert_id, :asset_id, :site_id, :alert_type, :status_type, :time_stamp, :comments)",
+            [alertId, assetId, siteId, alertType, statusType, timeStamp, comments],  // Bind values
             { autoCommit: true},  // Override the default non-autocommit behavior
             function(err, result)
             {
@@ -151,10 +161,9 @@ function parseJson (inJson) {
          check and see if the alertId already exists in the staging area.
          If it does, update the comments to: currentStatus. newComments
          */
-        var newComments = statusType + ". " + comments;
         conn.execute(
-            "UPDATE staging SET comments=:newComments WHERE alert_id = :alertId",
-            [newComments, alertId],
+            "UPDATE staging SET status_type=:statusType WHERE alert_id = :alertId",
+            [statusType, alertId],
             { autoCommit: true},  // Override the default non-autocommit behavior
             function(err, result)
             {
@@ -165,7 +174,8 @@ function parseJson (inJson) {
                         writeToLog("UPDATED ALERT_ID:" + alertId);
                     }
                     else {
-                        writeToLog("An alert with id " + alertId + " does not currently exist in the staging table.");
+                        writeToLog("An alert with id " + alertId + " does not currently exist in the staging table, but " +
+                            "an update was attempted.");
                     }
                     return cb(null, conn);
                 }
@@ -210,11 +220,11 @@ function parseJson (inJson) {
     }
 }
 
-var alert = {"type":"Initiate","timestamp":1492051668167,"alert":{"id":22426,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"test 7","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
+var alert = {"type":"Initiate","timestamp":1492051668167,"alert":{"id":22427,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"test","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
 
-var updatealert = {"type":"Acknowledged","timestamp":1492051668167,"alert":{"id":22424,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"test 7","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
+var updatealert = {"type":"Acknowledged","timestamp":1492051668167,"alert":{"id":22425,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"test update","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
 
 
 //Call function with test Json above
-parseJson(alert)
+parseJson(updatealert)
 
