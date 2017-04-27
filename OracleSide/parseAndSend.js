@@ -94,6 +94,7 @@ function parseJson (inJson) {
      }
 
      // If the assetId does not start with 'M00' return an invalid assetId error back to eAndon and write it to logFile.
+     // TODO: Add in the handling for the FCO, FMO, Facilities, and WFSC site asset IDs in this if statement below!
      if (!assetId.startsWith('M00')) {
      //Send error back to eAndon through API
 
