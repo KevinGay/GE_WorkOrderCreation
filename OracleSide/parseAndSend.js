@@ -174,7 +174,7 @@ function parseJson (inJson) {
                     return cb(err, conn);
                 } else {
                     if ( result.rowsAffected > 0) {
-                        writeToLog("UPDATED ALERT_ID:" + alertId);
+                        writeToLog("UPDATED ALERT_ID:" + alertId + ". Set statusType to " + statusType + " and comments to " + newComment);
                     }
                     else {
                         writeToLog("An alert with id " + alertId + " does not currently exist in the staging table, but " +
