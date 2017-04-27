@@ -78,14 +78,33 @@ function parseJson (inJson) {
      comments: anything extra that the user wants to include about the alert.
      */
 
+    //This is the error message that the parser sends back to eAndon whenever an asset ID is invalid
+    var invalidAssetError = "";
+
     var alertId = inJson['alert']['id'];
     var siteId = inJson['alert']['alertDefinition']['locationId'];
     var alertType = inJson['alert']['alertDefinition']['alertType']['name'];
     var statusType = inJson['type'];
     var timeStamp = inJson['timestamp'];
-    var comments = inJson['alert']['alertComments'][0]['alertComment'];
-    var assetId = comments.substring(0,8);
 
+    //Add all comments to an array unless it is a comment generated through this parser
+    var comments = [];
+    //These get stored in the staging area with the comments to tell when something happened. Entries correspond to comments
+    var commentsWithType = [];
+    for (var i = 0; i < inJson['alert']['alertComments'].length; i++)
+    {
+        comment = inJson['alert']['alertComments'][i]['alertComment']
+        commentType = inJson['alert']['alertComments'][i]['alertCommentType'];
+        if (comment != invalidAssetError) {
+            comments.push(comment);
+            commentsWithType.push(commentType + ":" + comment);
+        }
+    }
+
+    //Make sure that this get the assetId from the right comment!! Initiate should always be the first
+    var assetId = comments[0].substring(0,8);
+
+    //Change the string here if the table name changes
     var tableName = "staging";
 
     /* Uncomment this on deployment
@@ -94,8 +113,10 @@ function parseJson (inJson) {
      }
 
      // If the assetId does not start with 'M00' return an invalid assetId error back to eAndon and write it to logFile.
+     // Note: Only send error if statusType is initiate because an asset ID already exists in the staging area so it doesn't matter
+     //         what the comments are.
      // TODO: Add in the handling for the FCO, FMO, Facilities, and WFSC site asset IDs in this if statement below!
-     if (!assetId.startsWith('M00')) {
+     if (!assetId.startsWith('M00') && statusType = "Initiate") {
      //Send error back to eAndon through API
 
      writeToLog("Invalid asset ID given. Expected asset ID starting with M00, but given asset ID is " + assetId);
@@ -145,7 +166,7 @@ function parseJson (inJson) {
          */
         conn.execute(
             "INSERT INTO " + tableName + " VALUES (:alert_id, :asset_id, :site_id, :alert_type, :status_type, :time_stamp, :comments)",
-            [alertId, assetId, siteId, alertType, statusType, timeStamp, comments],  // Bind values
+            [alertId, assetId, siteId, alertType, statusType, timeStamp, comments[0]],  // Bind values
             { autoCommit: true},  // Override the default non-autocommit behavior
             function(err, result)
             {
@@ -164,9 +185,11 @@ function parseJson (inJson) {
          check and see if the alertId already exists in the staging area.
          If it does, update the statusType to the new statusType and update the comments to "oldComments. newStatusType - newComments"
          */
-        var newComment = ". " + statusType + " - " + comments;
+        
+        var newComment = commentsWithType.toString();
+
         conn.execute(
-            "UPDATE " + tableName + " SET status_type=:statusType, comments = comments || :comments" + " WHERE alert_id = :alertId",
+            "UPDATE " + tableName + " SET status_type=:statusType, comments = :newComment WHERE alert_id = :alertId",
             [statusType, newComment, alertId],
             { autoCommit: true},  // Override the default non-autocommit behavior
             function(err, result)
@@ -222,10 +245,10 @@ function parseJson (inJson) {
     }
 }
 
-var alert = {"type":"Initiate","timestamp":1492051668167,"alert":{"id":22427,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"test","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
-
+var alert = {"type":"Initiate","timestamp":1492051668167,"alert":{"id":28471,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"test","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
+var commentalert = {"type":"Initiate","timestamp":1493330975781,"alert":{"id":28471,"alertDefinition":{"id":9104,"alertType":{"id":204,"name":"FCO TEST","description":"Test Alert","locationId":"f7bfb6ed-5471-4a69-823c-89297c0f2e54","archived":false,"lastUpdatedDate":1491413771155,"lastUpdatedByUserString":"David Vargo","userSubscribed":false},"alertDefinitionSlas":[{"id":18765,"order":1,"numberOfMinutes":30}],"locationId":"22df2712-b55b-4ed3-bd93-a808661ce13c","name":"FCO TEST","description":"Test alert","qrCode":"1eade374-09d8-4ecf-a490-935f3ed354d3","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"David Vargo","lastUpdatedDate":1491413917423,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":1493321976557,"initiateTimestamp":1493321976557,"acknowledgeTimestamp":1493323393270,"resolveTimestamp":null,"alertSlaCount":1,"status":"Acknowledged","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":55754,"alertComment":"another alert through api","alertCommentDate":1493321976565,"alertCommentType":"Initiated","userString":"Kimberley Parnell","sso":"212572107"},{"id":55767,"alertComment":"test acknowledge","alertCommentDate":1493323393274,"alertCommentType":"Acknowledged","userString":"Lillie Colom","sso":"502053031"},{"id":55864,"alertComment":"I am updating the alert with i Kim","alertCommentDate":1493330654967,"alertCommentType":"General","userString":"Lillie Colom","sso":"502053031"},{"id":55865,"alertComment":"test comment 123","alertCommentDate":1493330893850,"alertCommentType":"General","userString":"Lillie Colom","sso":"502053031"},{"id":55866,"alertComment":"test98766","alertCommentDate":1493330975417,"alertCommentType":"General","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Kimberley Parnell","acknowledgedByUserString":"Lillie Colom","resolvedByUserString":""}};
 var updatealert = {"type":"Acknowledged","timestamp":1492051668167,"alert":{"id":22427,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"test update","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
 var update2 = {"type":"Resolved","timestamp":1492051668167,"alert":{"id":22427,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"error is resolved","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
 
 //Call function with test Json above
-parseJson(update2)
+parseJson(commentalert)
