@@ -111,7 +111,7 @@ function parseJson (inJson) {
     var tableName = "staging";
 
     /* Uncomment this on deployment
-     if (alertType != 'Maintenance') {
+     if (alertType != 'Maintenance' || commentType == "Escalate" || commentType == "Pause") {
         return;
      }
 
