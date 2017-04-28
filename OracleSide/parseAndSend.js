@@ -95,7 +95,10 @@ function parseJson (inJson) {
     {
         comment = inJson['alert']['alertComments'][i]['alertComment']
         commentType = inJson['alert']['alertComments'][i]['alertCommentType'];
-        if (comment != invalidAssetError) {
+        if (commentType == "General") {
+            //do nothing. Ignore all of the comments with commentType "general"
+        }
+        else if (comment != invalidAssetError) {
             comments.push(comment);
             commentsWithType.push(commentType + ":" + comment);
         }
@@ -227,6 +230,11 @@ function parseJson (inJson) {
                     dorelease(conn);
                 }
             });
+    }
+
+    //If the statusType is comment, dont update or attemp to insert anything.
+    else if (statusType == "Comment") {
+        //do nothing.
     }
 
     //If the statusType is anything other than "initiate", check and see if the alertId already exists in the staging area.
