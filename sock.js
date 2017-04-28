@@ -119,7 +119,7 @@ function parseJson (inJson) {
      // Note: Only send error if statusType is initiate because an asset ID already exists in the staging area so it doesn't matter
      //         what the comments are.
      // TODO: Add in the handling for the FCO, FMO, Facilities, and WFSC site asset IDs in this if statement below!
-     if ((!assetId.startsWith('M00')) && (siteId==('ae0cb684-6d22-42df-a7da-572bb1b1875c')) && statusType = "Initiate") {
+     if ((!assetId.startsWith('M00')) && (siteId==('ae0cb684-6d22-42df-a7da-572bb1b1875c')) && statusType == "Initiate") {
      //Send error back to eAndon through API
 	 
      writeToLog("(ALERTID=" + alertId + ") " + "Invalid asset ID given. Expected asset ID starting with M00, but given asset ID is " + assetId);
