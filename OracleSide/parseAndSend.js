@@ -95,7 +95,7 @@ function parseJson (inJson) {
     {
         comment = inJson['alert']['alertComments'][i]['alertComment']
         commentType = inJson['alert']['alertComments'][i]['alertCommentType'];
-        if (commentType == "General") {
+        if (commentType == "General" || commentType == "Escalate" || commentType == "Pause" || commentType == "Sla") {
             //do nothing. Ignore all of the comments with commentType "general"
         }
         else if (comment != invalidAssetError) {
