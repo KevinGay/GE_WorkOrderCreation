@@ -34,7 +34,7 @@ function connect() {
 	
 	//parse JSON file ....
     quote = JSON.parse(message.body);
-	console.log(parseJson(quote));	
+	//console.log(parseJson(quote));	
 	}
 	)
 }
@@ -96,7 +96,7 @@ function parseJson (inJson) {
     {
         comment = inJson['alert']['alertComments'][i]['alertComment']
         commentType = inJson['alert']['alertComments'][i]['alertCommentType'];
-        if (commentType == "General") {
+        if (commentType == "General" || commentType == "Escalate" || commentType == "Pause") {
             //do nothing. Ignore all of the comments with commentType "general"
         }
         else if (comment != invalidAssetError) {
@@ -113,7 +113,7 @@ function parseJson (inJson) {
 
   
      if (alertType != 'Maintenance') {
-        return;
+        return "Not maintenance";
      }
      // If the assetId does not start with 'M00' return an invalid assetId error back to eAndon and write it to logFile.
      // Note: Only send error if statusType is initiate because an asset ID already exists in the staging area so it doesn't matter
@@ -304,7 +304,7 @@ function getComment(token,alertDefId){
 	request(options, function (error, response, body) {
 	  if (error) throw new Error(error);
 
-	  console.log(body);
+	  //console.log(body);
 	});
 
 }
