@@ -119,7 +119,7 @@ function parseJson (inJson) {
      if (!assetId.startsWith('M00') && statusType = "Initiate") {
      //Send error back to eAndon through API
 
-     writeToLog("Invalid asset ID given. Expected asset ID starting with M00, but given asset ID is " + assetId);
+     writeToLog("(ALERTID=" + alertId + ") " + "Invalid asset ID given. Expected asset ID starting with M00, but given asset ID is " + assetId);
      return;
      }
      */
@@ -135,6 +135,8 @@ function parseJson (inJson) {
     var doconnect = function(cb) {
         /*
          Connect to the Oracle database using the specified info in dbConfig
+         cb: A callback is a function called at the completion of a given task; this prevents any blocking,
+         and allows other code to be run in the meantime.
          */
         oracledb.getConnection(
             {
@@ -165,7 +167,8 @@ function parseJson (inJson) {
          Also automatically commit the database upon successful insertion into the database.
          */
         conn.execute(
-            "INSERT INTO " + tableName + " VALUES (:alert_id, :asset_id, :site_id, :alert_type, :status_type, :time_stamp, :comments)",
+            "INSERT INTO " + tableName + "(ALERTID, ASSETID, SITEID, ALERTTYPE, STATUSTYPE, TIMESTAMP, COMMENTS) " +
+                "VALUES (:alert_id, :asset_id, :site_id, :alert_type, :status_type, :time_stamp, :comments)",
             [alertId, assetId, siteId, alertType, statusType, timeStamp, comments[0]],  // Bind values
             { autoCommit: true},  // Override the default non-autocommit behavior
             function(err, result)
@@ -173,7 +176,7 @@ function parseJson (inJson) {
                 if (err) {
                     return cb(err, conn);
                 } else {
-                    writeToLog("INSERTED ALERT_ID:" + alertId);
+                    writeToLog("INSERTED ALERTID:" + alertId);
                     return cb(null, conn);
                 }
             });
@@ -189,7 +192,7 @@ function parseJson (inJson) {
         var newComment = commentsWithType.toString();
 
         conn.execute(
-            "UPDATE " + tableName + " SET status_type=:statusType, comments = :newComment WHERE alert_id = :alertId",
+            "UPDATE " + tableName + " SET STATUSTYPE = :statusType, COMMENTS = :newComment WHERE ALERTID = :alertId",
             [statusType, newComment, alertId],
             { autoCommit: true},  // Override the default non-autocommit behavior
             function(err, result)
@@ -198,7 +201,7 @@ function parseJson (inJson) {
                     return cb(err, conn);
                 } else {
                     if ( result.rowsAffected > 0) {
-                        writeToLog("UPDATED ALERT_ID:" + alertId + ". Set statusType to " + statusType + " and comments to " + newComment);
+                        writeToLog("UPDATED ALERTID:" + alertId + ". Set STATUSTYPE to " + statusType + " and COMMENTS to " + newComment);
                     }
                     else {
                         writeToLog("An alert with id " + alertId + " does not currently exist in the staging table, but " +
@@ -218,7 +221,7 @@ function parseJson (inJson) {
             ],
             function (err, conn) {
                 if (err) {
-                    writeToLog(err.message);
+                    writeToLog("(ALERTID=" + alertId + ") " + err.message);
                 }
                 if (conn) {
                     dorelease(conn);
@@ -236,7 +239,7 @@ function parseJson (inJson) {
             ],
             function (err, conn) {
                 if (err) {
-                    writeToLog(err.message);
+                    writeToLog("(ALERTID=" + alertId + ") " + err.message);
                 }
                 if (conn) {
                     dorelease(conn);
@@ -246,7 +249,7 @@ function parseJson (inJson) {
 }
 
 var alert = {"type":"Initiate","timestamp":1492051668167,"alert":{"id":28471,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"test","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
-var commentalert = {"type":"Initiate","timestamp":1493330975781,"alert":{"id":28471,"alertDefinition":{"id":9104,"alertType":{"id":204,"name":"FCO TEST","description":"Test Alert","locationId":"f7bfb6ed-5471-4a69-823c-89297c0f2e54","archived":false,"lastUpdatedDate":1491413771155,"lastUpdatedByUserString":"David Vargo","userSubscribed":false},"alertDefinitionSlas":[{"id":18765,"order":1,"numberOfMinutes":30}],"locationId":"22df2712-b55b-4ed3-bd93-a808661ce13c","name":"FCO TEST","description":"Test alert","qrCode":"1eade374-09d8-4ecf-a490-935f3ed354d3","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"David Vargo","lastUpdatedDate":1491413917423,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":1493321976557,"initiateTimestamp":1493321976557,"acknowledgeTimestamp":1493323393270,"resolveTimestamp":null,"alertSlaCount":1,"status":"Acknowledged","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":55754,"alertComment":"another alert through api","alertCommentDate":1493321976565,"alertCommentType":"Initiated","userString":"Kimberley Parnell","sso":"212572107"},{"id":55767,"alertComment":"test acknowledge","alertCommentDate":1493323393274,"alertCommentType":"Acknowledged","userString":"Lillie Colom","sso":"502053031"},{"id":55864,"alertComment":"I am updating the alert with i Kim","alertCommentDate":1493330654967,"alertCommentType":"General","userString":"Lillie Colom","sso":"502053031"},{"id":55865,"alertComment":"test comment 123","alertCommentDate":1493330893850,"alertCommentType":"General","userString":"Lillie Colom","sso":"502053031"},{"id":55866,"alertComment":"test98766","alertCommentDate":1493330975417,"alertCommentType":"General","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Kimberley Parnell","acknowledgedByUserString":"Lillie Colom","resolvedByUserString":""}};
+var commentalert = {"type":"Acknowledged","timestamp":1493330975781,"alert":{"id":28471,"alertDefinition":{"id":9104,"alertType":{"id":204,"name":"FCO TEST","description":"Test Alert","locationId":"f7bfb6ed-5471-4a69-823c-89297c0f2e54","archived":false,"lastUpdatedDate":1491413771155,"lastUpdatedByUserString":"David Vargo","userSubscribed":false},"alertDefinitionSlas":[{"id":18765,"order":1,"numberOfMinutes":30}],"locationId":"22df2712-b55b-4ed3-bd93-a808661ce13c","name":"FCO TEST","description":"Test alert","qrCode":"1eade374-09d8-4ecf-a490-935f3ed354d3","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"David Vargo","lastUpdatedDate":1491413917423,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":1493321976557,"initiateTimestamp":1493321976557,"acknowledgeTimestamp":1493323393270,"resolveTimestamp":null,"alertSlaCount":1,"status":"Acknowledged","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":55754,"alertComment":"another alert through api","alertCommentDate":1493321976565,"alertCommentType":"Initiated","userString":"Kimberley Parnell","sso":"212572107"},{"id":55767,"alertComment":"test acknowledge","alertCommentDate":1493323393274,"alertCommentType":"Acknowledged","userString":"Lillie Colom","sso":"502053031"},{"id":55864,"alertComment":"I am updating the alert with i Kim","alertCommentDate":1493330654967,"alertCommentType":"General","userString":"Lillie Colom","sso":"502053031"},{"id":55865,"alertComment":"test comment 123","alertCommentDate":1493330893850,"alertCommentType":"General","userString":"Lillie Colom","sso":"502053031"},{"id":55866,"alertComment":"test98766","alertCommentDate":1493330975417,"alertCommentType":"General","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Kimberley Parnell","acknowledgedByUserString":"Lillie Colom","resolvedByUserString":""}};
 var updatealert = {"type":"Acknowledged","timestamp":1492051668167,"alert":{"id":22427,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"test update","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
 var update2 = {"type":"Resolved","timestamp":1492051668167,"alert":{"id":22427,"alertDefinition":{"id":7589,"alertType":{"id":42,"name":"Facilities","description":"Facilities","locationId":null,"archived":false,"lastUpdatedDate":1481470409096,"lastUpdatedByUserString":"Andrew Severson","userSubscribed":false},"alertDefinitionSlas":[{"id":10986,"order":1,"numberOfMinutes":30},{"id":10987,"order":2,"numberOfMinutes":60},{"id":10988,"order":3,"numberOfMinutes":120},{"id":10989,"order":4,"numberOfMinutes":240}],"locationId":"008bffa2-549e-4eb1-b5d8-de53fc0b3f00","name":"FCO Manufacturing gases","description":"Flow over max value","qrCode":"5171055f-c94b-4107-b6ff-f0ed21a9b3f1","onlyOneActive":null,"archived":false,"lastUpdatedByUserString":"Lillie Colom","lastUpdatedDate":1490278581458,"hasSlaCoverage":false,"hasStatusCoverage":false},"slaCheckTimestamp":null,"resolveTimestamp":null,"alertSlaComment":0,"status":"Initiated","slaPause":false,"slaPauseDatetime":null,"alertComments":[{"id":32573,"alertComment":"error is resolved","alertCommentDate":1492051667896,"alertCommentType":"Initiated","userString":"Lillie Colom","sso":"502053031"}],"initiatedByUserString":"Lillie Colom","acknowledgedByUserString":"","resolvedByUserString":""}}
 
