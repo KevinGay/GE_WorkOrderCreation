@@ -1,5 +1,6 @@
 
 var quote;
+var invalidAssetError = "Invalid asset id, workorder was not created. Please create a new alert and include the asset id in the comments. ";
 function connect() {
   var WebSocket = require('faye-websocket'),
 	//establish web socket connection to the endpoint
@@ -34,7 +35,7 @@ function connect() {
 	
 	//parse JSON file ....
     quote = JSON.parse(message.body);
-	//console.log(parseJson(quote));	
+	console.log(parseJson(quote));	
 	}
 	)
 }
@@ -79,14 +80,14 @@ function parseJson (inJson) {
      */
 
     //This is the error message that the parser sends back to eAndon whenever an asset ID is invalid
-    var invalidAssetError = "invalid asset id";
+    
 
     var alertId = inJson['alert']['id'];
     var siteId = inJson['alert']['alertDefinition']['locationId'];
     var alertType = inJson['alert']['alertDefinition']['alertType']['name'];
     var statusType = inJson['type'];
     var timeStamp = inJson['timestamp'];
-	var alertDefId = inJson['alert']['alertDefinition']['id'];
+	var sso = inJson['alert']['alertComments']['sso'];
 
     //Add all comments to an array unless it is a comment generated through this parser
     var comments = [];
@@ -96,7 +97,7 @@ function parseJson (inJson) {
     {
         comment = inJson['alert']['alertComments'][i]['alertComment']
         commentType = inJson['alert']['alertComments'][i]['alertCommentType'];
-        if (commentType == "General" || commentType == "Escalate" || commentType == "Pause") {
+        if (commentType == "General" || commentType == "Escalate" || commentType == "Pause" || commentType == "Sla") {
             //do nothing. Ignore all of the comments with commentType "general"
         }
         else if (comment != invalidAssetError) {
@@ -111,19 +112,21 @@ function parseJson (inJson) {
     //Change the string here if the table name changes
     var tableName = "GEPSEAM.GEPS_EAM_MAINTENENCE_WO";
 
-  
+  /*
      if (alertType != 'Maintenance') {
-        return "Not maintenance";
+        return;
      }
+	 */
      // If the assetId does not start with 'M00' return an invalid assetId error back to eAndon and write it to logFile.
      // Note: Only send error if statusType is initiate because an asset ID already exists in the staging area so it doesn't matter
      //         what the comments are.
      // TODO: Add in the handling for the FCO, FMO, Facilities, and WFSC site asset IDs in this if statement below!
-     if ((!assetId.startsWith('M00')) && (siteId==('ae0cb684-6d22-42df-a7da-572bb1b1875c')) && statusType == "Initiate") {
+	 //(siteId==('ae0cb684-6d22-42df-a7da-572bb1b1875c')) 
+     if (!assetId.startsWith('M00')&& statusType == "Initiate") {
      //Send error back to eAndon through API
 	 
      writeToLog("(ALERTID=" + alertId + ") " + "Invalid asset ID given. Expected asset ID starting with M00, but given asset ID is " + assetId);
-		getToken(alertDefId);
+		getToken(alertId,sso);
 	return;
      }
      
@@ -260,7 +263,7 @@ function parseJson (inJson) {
 
 //get Api
 
-function getToken(alertDefId){
+function getToken(alertId,sso){
 	
 	var request = require("request");
 
@@ -277,7 +280,7 @@ function getToken(alertDefId){
 	request(options, function (error, response, body) {
 	  if (error) throw new Error(error);
 	  //console.log(body);
-	  getComment("Bearer " + JSON.parse(body)['access_token'],alertDefId);
+	  getComment("Bearer " + JSON.parse(body)['access_token'],alertId,sso);
 	  
 	  //console.log(parseAccessToken(JSON.parse(body)));
 	});
@@ -285,12 +288,12 @@ function getToken(alertDefId){
 }
 
 
-function getComment(token,alertDefId){
+function getComment(token,alertId,sso){
 	var request = require("request");
 
 	var options = { method: 'PUT',
 	//url: 'https://eandon-metadata.run.asv-pr.ice.predix.io/api/v1/alerts/28471/comment',
-	 url: 'https://eandon-metadata.run.asv-pr.ice.predix.io/api/v1/alerts/'+alertDefId+'/comment',
+	 url: 'https://eandon-metadata.run.asv-pr.ice.predix.io/api/v1/alerts/'+alertId+'/comment',
 	  headers: 
 	   { 'postman-token': 'cde0dbc5-4fb4-c42e-e8ab-4d17b5a78807',
 		 'cache-control': 'no-cache',
@@ -298,13 +301,13 @@ function getComment(token,alertDefId){
 		 'content-type': 'application/json' },
 	  body: 
 	   { comment: invalidAssetError,
-		 sso: '502053031' },
+		 sso: sso },
 	  json: true };
 
 	request(options, function (error, response, body) {
 	  if (error) throw new Error(error);
 
-	  //console.log(body);
+	  console.log(body);
 	});
 
 }
